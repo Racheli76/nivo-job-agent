@@ -48,6 +48,7 @@ app.add_middleware(
 class CVText(BaseModel):
     text: Optional[str] = None
     session_id: Optional[str] = None
+    job_desc: Optional[str] = None  # Optional job description for CV tailoring
 
 class JobDesc(BaseModel):
     title: str = ""
@@ -139,19 +140,14 @@ async def analyze_cv(body: CVText):
     if not text:
         text = body.text or ''
     lang = session_lang or _detect_language(text)
+    job_desc = body.job_desc or ''
     if MOCK_MODE:
-        return {"result": mock_analyze_cv(text, lang)}
+        return {"result": mock_analyze_cv(text, lang, job_desc)}
     if not _openai_available():
         return {"error": "OpenAI API key not configured. Set OPENAI_API_KEY or enable MOCK_MODE."}
     try:
-        # instruct model to return JSON only and in the CV language
-        prompt = (
-            "You are a helpful assistant. Given the CV text, return a JSON object with keys:"
-            " score (integer 0-100), summary (string), suggestions (array of short strings), bullets (array of short strings)."
-            f" Respond with JSON only, in {'Hebrew' if lang=='he' else 'English'}.\n\nCV:\n" + text
-        )
         from services.prompting import run_analyze_cv
-        content = run_analyze_cv(text, lang, max_tokens=400)
+        content = run_analyze_cv(text, job_desc, lang, max_tokens=2000)
         try:
             parsed = _parse_json_from_text(content)
             return {"result": parsed}
@@ -182,11 +178,6 @@ async def match_job(data: JobDesc):
     if not _openai_available():
         return {"error": "OpenAI API key not configured. Set OPENAI_API_KEY or enable MOCK_MODE."}
     try:
-        prompt = (
-            "You are a helpful assistant. Given the candidate CV and the job description, return a JSON object with keys:\n"
-            "match_score (integer 0-100), common_terms (array of strings), recommended_changes (array of strings), cover_letter (string)."
-            f" Respond with JSON only, in {'Hebrew' if lang=='he' else 'English'}.\n\nCV:\n" + cv_text + "\n\nJOB DESCRIPTION:\n" + data.description
-        )
         from services.prompting import run_match_job
         content = run_match_job(cv_text, data.description, lang, max_tokens=600)
         try:
@@ -222,12 +213,8 @@ async def simulate_interview(title: str = Form(...)):
     if not _openai_available():
         return {"error": "OpenAI API key not configured. Set OPENAI_API_KEY or enable MOCK_MODE."}
     try:
-        prompt = (
-            "You are a helpful interviewer. Given the candidate CV (if available) and a role title, return a JSON object with keys:\n"
-            "questions (array of 8 strings) and advice (short string)."
-            f" Respond with JSON only, in {'Hebrew' if lang=='he' else 'English'}.\n\nRole:\n" + role + "\n\nCV:\n" + cv_text
-        )
         from services.prompting import run_simulate_interview
+        content = run_simulate_interview(role, cv_text, lang, max_tokens=800)
         content = run_simulate_interview(role, cv_text, lang, max_tokens=800)
         try:
             parsed = _parse_json_from_text(content)

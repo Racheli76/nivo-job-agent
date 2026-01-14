@@ -135,6 +135,7 @@ function App() {
     try {
       const body = { text: cvText };
       if (sessionId) body.session_id = sessionId;
+      if (jobDesc && jobDesc.trim()) body.job_desc = jobDesc;
       const res = await fetch(`${API_BASE}/analyze-cv`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
       setResult(data.result || data);
@@ -386,7 +387,7 @@ function App() {
                   </div>
 
                   <div className="decision-card">
-                    <div style={{ fontWeight: 800 }}>{language === 'he' ? 'המוח מקבל החלטה' : 'Let the Brain Decide'}</div>
+                    <div style={{ fontWeight: 800 }}>{language === 'he' ? 'NIVO מקבל החלטה' : 'Let the Brain Decide'}</div>
                     <div className="muted" style={{ marginTop: 8 }}>{language === 'he' ? 'החלטה חכמה: ראיון או שיפור קורות חיים' : 'Decide: interview prep or CV improvement'}</div>
                     <div style={{ marginTop: 12 }}>
                       <button className="btn" onClick={decide} disabled={isProcessing || !jobDesc.trim()}>{language === 'he' ? 'הפעל' : 'Run'}</button>
@@ -408,6 +409,30 @@ function App() {
                   ) : (
                     <>
                       <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>{result.summary || result.title || (language==='he' ? 'תוצאה' : 'Result')}</div>
+                      
+                      {/* Score Comparison */}
+                      {(result.score != null || result.score_after_improvement != null) && (
+                        <div style={{ marginTop: 16, padding: 12, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 8, border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                          <div style={{ display: 'flex', gap: 24, justifyContent: 'center', alignItems: 'center' }}>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{language === 'he' ? 'ניקוד נוכחי' : 'Current Score'}</div>
+                              <div style={{ fontSize: 28, fontWeight: 700, color: '#f59e0b' }}>{result.score || 0}</div>
+                            </div>
+                            <div style={{ fontSize: 24, color: 'var(--muted)' }}>→</div>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{language === 'he' ? 'ניקוד אחרי שיפור' : 'After Improvement'}</div>
+                              <div style={{ fontSize: 28, fontWeight: 700, color: '#10b981' }}>{result.score_after_improvement || result.score || 0}</div>
+                            </div>
+                            {result.score_after_improvement && result.score && (
+                              <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{language === 'he' ? 'שיפור' : 'Improvement'}</div>
+                                <div style={{ fontSize: 28, fontWeight: 700, color: '#06b6d4' }}>+{result.score_after_improvement - result.score}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
                       {result.match_score != null && <div className="match-score-badge">{result.match_score}%</div>}
                       {result.common_terms && (
                         <div style={{ marginTop: 8 }}><strong>{language === 'he' ? 'מונחים משותפים:' : 'Common terms:'}</strong> {(result.common_terms || []).join(', ')}</div>
@@ -425,6 +450,80 @@ function App() {
                           <strong>{language === 'he' ? 'הצעות לשיפור:' : 'Suggestions:'}</strong>
                           <ul style={{ textAlign: language === 'he' ? 'right' : 'left', direction: language === 'he' ? 'rtl' : 'ltr' }}>
                             {result.suggestions.map((s, i) => <li key={i}>{s}</li>)}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Improved CV TextArea */}
+                      {result.improved_cv && (
+                        <div style={{ marginTop: 16 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{language === 'he' ? 'קורות חיים משופרים' : 'Improved CV'}</div>
+                          <textarea
+                            readOnly
+                            value={result.improved_cv}
+                            style={{
+                              width: '100%',
+                              height: 200,
+                              padding: 12,
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              border: '1px solid var(--border-color)',
+                              borderRadius: 6,
+                              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                              resize: 'vertical'
+                            }}
+                          />
+                          <button
+                            className="btn secondary"
+                            style={{ marginTop: 8 }}
+                            onClick={() => {
+                              navigator.clipboard.writeText(result.improved_cv);
+                              alert(language === 'he' ? 'הועתק ללוח!' : 'Copied to clipboard!');
+                            }}
+                          >
+                            {language === 'he' ? 'העתק' : 'Copy'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Tailored CV TextArea - only if job_desc was provided */}
+                      {result.tailored_cv && (
+                        <div style={{ marginTop: 16 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>{language === 'he' ? 'קורות חיים מותאמים למשרה' : 'Tailored CV for Job'}</div>
+                          <textarea
+                            readOnly
+                            value={result.tailored_cv}
+                            style={{
+                              width: '100%',
+                              height: 200,
+                              padding: 12,
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              border: '1px solid var(--border-color)',
+                              borderRadius: 6,
+                              backgroundColor: 'rgba(34, 197, 94, 0.05)',
+                              resize: 'vertical'
+                            }}
+                          />
+                          <button
+                            className="btn secondary"
+                            style={{ marginTop: 8 }}
+                            onClick={() => {
+                              navigator.clipboard.writeText(result.tailored_cv);
+                              alert(language === 'he' ? 'הועתק ללוח!' : 'Copied to clipboard!');
+                            }}
+                          >
+                            {language === 'he' ? 'העתק' : 'Copy'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Missing Skills */}
+                      {result.missing_skills && result.missing_skills.length > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                          <strong>{language === 'he' ? 'כישורים חסרים:' : 'Missing skills:'}</strong>
+                          <ul style={{ textAlign: language === 'he' ? 'right' : 'left', direction: language === 'he' ? 'rtl' : 'ltr' }}>
+                            {result.missing_skills.map((skill, i) => <li key={i}>{skill}</li>)}
                           </ul>
                         </div>
                       )}
