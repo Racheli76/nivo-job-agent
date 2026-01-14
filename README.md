@@ -120,7 +120,39 @@ Visit: [http://localhost:5173](https://www.google.com/search?q=http://localhost:
 
 * **Mock Mode:** Set `MOCK_MODE=true` to run fully offline.
 * **Ports:** Frontend 5173, backend 8000. Ensure your firewall allows these ports.
-* **Security & Privacy:** Session data is stored in memory and not persisted to disk.
+* **Security & Privacy:** Session data is stored in memory (or Redis if you configure `REDIS_URL`) and not persisted to disk by default.
+
+## Testing & local CI
+
+We added a basic test suite (pytest) and a GitHub Actions workflow that runs backend tests on PRs.
+
+Run the backend tests locally:
+
+```powershell
+cd backend
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pytest -q
+```
+
+Notes:
+- The backend tests cover utilities, the OpenAI service wrapper (mocked), prompting helpers, session store, upload size checks and rate limiting.
+- CI is configured in `.github/workflows/ci.yml` to run the backend tests automatically on pushes/PRs.
+
+## Configuration (important env vars)
+
+Key environment variables (also included in `.env.example`):
+
+- `MOCK_MODE` (true|false) — prefer `true` for offline testing.
+- `OPENAI_API_KEY` — your OpenAI API key (required when `MOCK_MODE=false`).
+- `OPENAI_MODEL` — model id to use (default: `gpt-4o-mini`).
+- `DECIDE_THRESHOLD` — numeric threshold for `decide()` action (default: `75`).
+- `MAX_UPLOAD_SIZE_BYTES` — max upload size for CV files (default: 5MB).
+- `RATE_LIMIT_DEFAULT` — default rate limit string (e.g., `60/minute`).
+- `ALLOWED_ORIGINS` — CORS origins allowed (configured via `config`).
+- `REDIS_URL` — optional Redis URL for session persistence (if not set, an in-memory fallback is used).
+
+These make the app predictable and safer for local development and for production deployments.
 
 ---
 

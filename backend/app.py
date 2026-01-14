@@ -1,9 +1,9 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 from pydantic import BaseModel
 import uvicorn
 import os
+from config import settings
 from typing import Any, Dict, Optional
 import json
 import uuid
@@ -12,24 +12,35 @@ import zipfile
 import io
 import re
 
-try:
-    # xml parsing for docx extraction
-    import xml.etree.ElementTree as ET
-except Exception:
-    ET = None
+# rate limiting
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
 
-load_dotenv()
+
 # When MOCK_MODE is true the server will return deterministic mock data
-MOCK_MODE = os.getenv('MOCK_MODE', 'true').lower() == 'true'
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+MOCK_MODE = settings.mock_mode
+OPENAI_API_KEY = settings.openai_api_key
 
 app = FastAPI(title="Job Agent API")
+
+# Rate limiter (uses client IP by default)
+limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit_default])
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+# Global handler for rate limit exceeded
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request, exc):
+    return JSONResponse(status_code=429, content={"error": "rate_limit_exceeded"})
 
 # Allow the frontend (vite default) and local testing to call the API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "*"],
-    allow_credentials=True,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -51,8 +62,8 @@ class TranslatePayload(BaseModel):
 class DecidePayload(BaseModel):
     session_id: str
 
-# Simple in-memory session store: session_id -> {'cv_text': str, 'uploaded_at': ts}
-SESSIONS: Dict[str, Dict[str, Any]] = {}
+# Session store (may be Redis or in-memory)
+from session_store import session_store
 
 
 def _parse_json_from_text(text: str) -> Any:
@@ -92,46 +103,8 @@ def _detect_language(text: str) -> str:
 
 # --- mocks ---
 
-def mock_analyze_cv(text: str, lang: str = 'he') -> Dict[str, Any]:
-    if lang == 'en':
-        return {"score": 80, "summary": "Mock CV summary", "suggestions": ["Highlight achievements", "Shorten paragraphs"], "bullets": ["Improve bullet X", "Add skills"]}
-    return {"score": 80, "summary": "CV summary mock", "suggestions": ["הדגישי הישגים", "קצרי פסקאות"], "bullets": ["שפרי bullet X", "הוסיפי כישורים"]}
-
-
-def mock_match_job(cv_text: str, job_desc: str, lang: str = 'he') -> Dict[str, Any]:
-    if lang == 'en':
-        return {"match_score": 70, "common_terms": ["example"], "recommended_changes": ["add keyword"], "cover_letter": "Hello, I am interested..."}
-    return {"match_score": 70, "common_terms": ["example"], "recommended_changes": ["הוסף מילת מפתח"], "cover_letter": "שלום, אני מעוניינת..."}
-
-
-def mock_simulate_interview(title: str, lang: str = 'he') -> Dict[str, Any]:
-    if lang == 'en':
-        return {"questions": [f"Tell me about your experience for {title}"], "advice": "Answer briefly, with examples"}
-    return {"questions": [f"ספרי על ניסיון ל-{title}"], "advice": "תשיבי בקצרה, עם דוגמאות"}
-def _openai_available() -> bool:
-    return bool(OPENAI_API_KEY) and not MOCK_MODE
-
-
-def _call_openai_chat(messages, max_tokens=400):
-    """Call OpenAI in a way compatible with openai<1.0 and openai>=1.0.
-    Returns the assistant text or raises the underlying exception.
-    """
-    try:
-        import openai
-    except Exception as e:
-        raise
-
-    # new client API (openai>=1.0.0)
-    if hasattr(openai, "OpenAI"):
-        client = openai.OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else openai.OpenAI()
-        resp = client.chat.completions.create(model="gpt-4o-mini", messages=messages, max_tokens=max_tokens)
-        # new API returns choices[0].message.content
-        return resp.choices[0].message.content
-
-    # older API
-    openai.api_key = OPENAI_API_KEY
-    resp = openai.ChatCompletion.create(model='gpt-4o-mini', messages=messages, max_tokens=max_tokens)
-    return resp.choices[0].message.content
+from mocks import mock_analyze_cv, mock_match_job, mock_simulate_interview
+from services.openai import openai_available as _openai_available, call_openai_chat as _call_openai_chat
 
 
 def _extract_text_from_docx_bytes(data: bytes) -> str:
@@ -159,7 +132,7 @@ async def analyze_cv(body: CVText):
     text = ''
     session_lang = None
     if body.session_id:
-        s = SESSIONS.get(body.session_id)
+        s = await session_store.get(body.session_id)
         if s:
             text = s.get('cv_text', '')
             session_lang = s.get('lang')
@@ -177,7 +150,8 @@ async def analyze_cv(body: CVText):
             " score (integer 0-100), summary (string), suggestions (array of short strings), bullets (array of short strings)."
             f" Respond with JSON only, in {'Hebrew' if lang=='he' else 'English'}.\n\nCV:\n" + text
         )
-        content = _call_openai_chat([{'role': 'user', 'content': prompt}], max_tokens=400)
+        from services.prompting import run_analyze_cv
+        content = run_analyze_cv(text, lang, max_tokens=400)
         try:
             parsed = _parse_json_from_text(content)
             return {"result": parsed}
@@ -192,14 +166,14 @@ async def match_job(data: JobDesc):
     cv_text = ''
     session_lang = None
     if data.session_id:
-        s = SESSIONS.get(data.session_id)
+        s = await session_store.get(data.session_id)
         if s:
             cv_text = s.get('cv_text', '')
             session_lang = s.get('lang')
         # store job text/title in session for later decide
         s = s or {}
         s.update({'job_desc': data.description, 'job_title': data.title})
-        SESSIONS[data.session_id] = s
+        await session_store.set(data.session_id, s)
     if not cv_text:
         cv_text = ''
     lang = session_lang or _detect_language(cv_text or data.description or '')
@@ -213,7 +187,8 @@ async def match_job(data: JobDesc):
             "match_score (integer 0-100), common_terms (array of strings), recommended_changes (array of strings), cover_letter (string)."
             f" Respond with JSON only, in {'Hebrew' if lang=='he' else 'English'}.\n\nCV:\n" + cv_text + "\n\nJOB DESCRIPTION:\n" + data.description
         )
-        content = _call_openai_chat([{'role': 'user', 'content': prompt}], max_tokens=600)
+        from services.prompting import run_match_job
+        content = run_match_job(cv_text, data.description, lang, max_tokens=600)
         try:
             parsed = _parse_json_from_text(content)
             return {"result": parsed}
@@ -235,7 +210,7 @@ async def simulate_interview(title: str = Form(...)):
     cv_text = ''
     session_lang = None
     if session_id:
-        s = SESSIONS.get(session_id)
+        s = await session_store.get(session_id)
         if s:
             cv_text = s.get('cv_text', '')
             session_lang = s.get('lang')
@@ -252,7 +227,8 @@ async def simulate_interview(title: str = Form(...)):
             "questions (array of 8 strings) and advice (short string)."
             f" Respond with JSON only, in {'Hebrew' if lang=='he' else 'English'}.\n\nRole:\n" + role + "\n\nCV:\n" + cv_text
         )
-        content = _call_openai_chat([{'role': 'user', 'content': prompt}], max_tokens=800)
+        from services.prompting import run_simulate_interview
+        content = run_simulate_interview(role, cv_text, lang, max_tokens=800)
         try:
             parsed = _parse_json_from_text(content)
             return {"result": parsed}
@@ -266,6 +242,11 @@ async def upload_cv_file(file: UploadFile = File(...)):
     contents = await file.read()
     filename = file.filename or 'file'
     text = ''
+
+    # reject huge files early
+    if len(contents) > settings.max_upload_size_bytes:
+        return {"error": "file_too_large", "max_size": settings.max_upload_size_bytes}
+
     # handle .docx without extra deps
     if filename.lower().endswith('.docx'):
         text = _extract_text_from_docx_bytes(contents)
@@ -281,7 +262,7 @@ async def upload_cv_file(file: UploadFile = File(...)):
     # detect language and create session to store CV text for subsequent calls
     lang = _detect_language(text)
     session_id = str(uuid.uuid4())
-    SESSIONS[session_id] = {"cv_text": text, "uploaded_at": time.time(), "filename": filename, "lang": lang}
+    await session_store.set(session_id, {"cv_text": text, "uploaded_at": time.time(), "filename": filename, "lang": lang})
 
     return {"filename": filename, "text_preview": text[:20000], "length": len(contents), "session_id": session_id, "lang": lang}
 
@@ -306,7 +287,7 @@ async def translate(payload: TranslatePayload):
 @app.post('/decide')
 async def decide(payload: DecidePayload):
     session_id = payload.session_id
-    s = SESSIONS.get(session_id)
+    s = await session_store.get(session_id)
     if not s:
         return {"error": "session_not_found"}
     cv_text = s.get('cv_text', '').strip()
@@ -331,7 +312,7 @@ async def decide(payload: DecidePayload):
                 match_score = parsed.get('match_score')
             except Exception:
                 match_score = None
-        threshold = 75
+        threshold = settings.decide_threshold
         action = 'prep_interview' if (isinstance(match_score, int) and match_score >= threshold) else 'improve_cv'
         return {"action": action, "match_score": match_score, "reason": f"threshold_{threshold}"}
     except Exception as e:
