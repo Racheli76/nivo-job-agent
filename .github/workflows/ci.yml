@@ -24,7 +24,7 @@ jobs:
         working-directory: ./backend
         run: |
           pip install pytest
-          pytest -q
+          python -m pytest -q
 
   frontend:
     runs-on: ubuntu-latest
