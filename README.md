@@ -37,7 +37,6 @@ NIVO mixes approachability with strategy:
 - **Strategic squirrel:** collects and organizes information so you arrive prepared.
 
 <p align="center">
-  
   <img src="frontend/src/nivo.png" width="220" alt="NIVO Mascot" />
 </p>
 
@@ -59,40 +58,41 @@ NIVO mixes approachability with strategy:
 
 ## Quick start
 
-### Windows (PowerShell):
+### 1. Backend Setup
+Choose your preferred mode:
+
+**Option A: Mock Mode (Fast Demo, No API Key)**
 ```powershell
-# Backend
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+# Windows
 $env:MOCK_MODE = 'true'
 uvicorn app:app --reload
 
-# Start frontend in another terminal:
-cd frontend
-npm install
-npm run dev
-
-### macOS / Linux:
-
-```bash
-# Backend
-cd backend
-python -m venv .venv
-source .venv/bin/activate
+# macOS / Linux
 export MOCK_MODE=true
-pip install -r requirements.txt
+uvicorn app:app --reload
+```
+**Option B: Real Mode (Live OpenAI Intelligence)**
+
+```powershell
+# Windows
+$env:MOCK_MODE = 'false'
+$env:OPENAI_API_KEY = 'your-key-here'
 uvicorn app:app --reload
 
-# Start frontend in another terminal:
+```
+
+### 2. Frontend Setup
+
+In another terminal:
+
+```bash
 cd frontend
 npm install
 npm run dev
 
 ```
 
-Visit the Vite URL (usually http://localhost:5173). API: [http://127.0.0.1:8000](http://127.0.0.1:8000)
+Visit: [http://localhost:5173](https://www.google.com/search?q=http://localhost:5173) | API: [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ---
 
@@ -111,16 +111,16 @@ Visit the Vite URL (usually http://localhost:5173). API: [http://127.0.0.1:8000]
 
 * **.gitignore** — ignores virtual environments, node_modules, build artifacts, logs, and secrets.
 * **.gitattributes** — normalizes line endings for cross-platform contribution.
-* **LICENSE** — MIT license (default for demos).
-* **.github/workflows/ci.yml** — basic CI to install Python and Node deps and run builds.
+* **LICENSE** — MIT license.
+* **.github/workflows/ci.yml** — CI to install Python and Node deps and run builds.
 
 ---
 
 ## Development tips & troubleshooting
 
-* **Mock Mode:** set `MOCK_MODE=true` to run fully offline.
-* **Ports:** frontend 5173, backend 8000. If Windows blocks, ensure proper permissions.
-* **Security & Privacy:** This demo stores all session data in memory and does not persist user CVs to disk by default.
+* **Mock Mode:** Set `MOCK_MODE=true` to run fully offline.
+* **Ports:** Frontend 5173, backend 8000. Ensure your firewall allows these ports.
+* **Security & Privacy:** Session data is stored in memory and not persisted to disk.
 
 ---
 
@@ -143,17 +143,17 @@ job-agent-nivo/
 
 ## Roadmap & ideas
 
-* Add robust PDF and `docx` extraction (`pdfminer.six`, `python-docx`) with retries and chunking.
-* Add tokenization and batching logic to avoid token-overflow with large CVs.
-* Extract a small, shared API client (`frontend/src/api.js`) to centralize fetch logic.
-* Componentize the frontend into `Uploader`, `DecisionCenter`, and `ResultsPanel`.
-* Add backend unit tests (`pytest`) and Playwright/Cypress E2E tests.
+* Add robust PDF and `docx` extraction with retries and chunking.
+* Add tokenization and batching logic to avoid token-overflow.
+* Extract a shared API client (`frontend/src/api.js`) for cleaner fetch logic.
+* Componentize the frontend into `Uploader` and `ResultsPanel`.
+* Add backend unit tests (`pytest`) and E2E tests.
 
 ---
 
 ## Contributing & License
 
-* **Contributions:** Open an issue or PR; I can add CI tests and a contribution guide.
+* **Contributions:** Open an issue or PR for feedback and improvements.
 * **License:** MIT (see `LICENSE`).
 
 ---
