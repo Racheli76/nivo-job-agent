@@ -1,0 +1,163 @@
+# <img src="frontend/src/nivo.png" width="45" align="center" /> Job Agent — NIVO (Strategic Career Assistant)
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Node](https://img.shields.io/badge/Node-16%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18.2.0-61DAFB?logo=react&logoColor=white)](https://github.com/facebook/react)
+[![Vite](https://img.shields.io/badge/Vite-^5.0.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100.0-009688?logo=fastapi&logoColor=white)](https://github.com/tiangolo/fastapi)
+[![Uvicorn](https://img.shields.io/badge/Uvicorn-0.22.0-3B82F6?logo=uvicorn&logoColor=white)](https://www.uvicorn.org/)
+
+A compact demo that converts CVs into actionable outputs (analysis, match scoring, tailored cover letters, and interview prep). Built with a clear structure so it’s easy to run locally, inspect behaviour, and adapt for production use.
+
+---
+
+## Table of Contents
+- [TL;DR](#tldr)
+- [Why "NIVO"?](#why-nivo)
+- [Features](#features)
+- [Tech stack](#tech-stack)
+- [Quick start](#quick-start)
+- [API endpoints (summary)](#api-endpoints-summary)
+- [Repository prepared for GitHub](#repository-prepared-for-github)
+- [Development tips & troubleshooting](#development-tips--troubleshooting)
+- [Roadmap](#roadmap)
+- [Contributing & license](#contributing--license)
+
+---
+
+## TL;DR
+
+Run the backend and frontend locally; upload/paste a CV, paste a job description, and try Match / Interview / Decide. The system stores session data in-memory and provides a mock mode for offline testing.
+
+## Why "NIVO"?
+
+NIVO mixes approachability with strategy:
+- **"Nib" (word choice):** helps you find the right phrasing and ATS-friendly language.
+- **Prediction:** estimates likely interview questions and ATS scoring tendencies.
+- **Strategic squirrel:** collects and organizes information so you arrive prepared.
+
+<p align="center">
+  
+  <img src="frontend/src/nivo.png" width="220" alt="NIVO Mascot" />
+</p>
+
+## Features
+
+- **Upload or paste CV:** backend returns a `session_id` for follow-up requests.
+- **Decision Center:** Match & Optimize, Interview Prep, Decide.
+- **Human-readable outputs:** match score, common terms, suggested CV changes, cover letters, and interview Q&A.
+- **Mock Mode:** No OpenAI key required for local testing (optional Real Mode with `OPENAI_API_KEY`).
+
+## Tech stack
+
+- **Backend:** FastAPI + Uvicorn (Python)
+- **Frontend:** Vite + React 18
+- **Styling:** Modern CSS (Glassmorphism), Heebo font for Hebrew support.
+- **Dev/test:** pytest, Vitest/Jest, Playwright/Cypress.
+
+---
+
+## Quick start
+
+### Windows (PowerShell):
+```powershell
+# Backend
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:MOCK_MODE = 'true'
+uvicorn app:app --reload
+
+# Start frontend in another terminal:
+cd frontend
+npm install
+npm run dev
+
+### macOS / Linux:
+
+```bash
+# Backend
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+export MOCK_MODE=true
+pip install -r requirements.txt
+uvicorn app:app --reload
+
+# Start frontend in another terminal:
+cd frontend
+npm install
+npm run dev
+
+```
+
+Visit the Vite URL (usually http://localhost:5173). API: [http://127.0.0.1:8000](http://127.0.0.1:8000)
+
+---
+
+## API endpoints (summary)
+
+* `POST /upload-cv-file` — multipart upload → `{ session_id, text_preview, length, lang }`
+* `POST /analyze-cv` — `{ text?, session_id? }` → analysis
+* `POST /match-job` — `{ title, description, session_id? }` → `match_score`, `recommended_changes`, `cover_letter`
+* `POST /simulate-interview` — form `title` (or `Role||session_id`) → `questions`, `advice`
+* `POST /decide` — `{ session_id }` → `{ action: 'prep_interview'|'improve_cv', match_score }`
+* `GET /health` — health and mock-mode flag
+
+---
+
+## Repository prepared for GitHub
+
+* **.gitignore** — ignores virtual environments, node_modules, build artifacts, logs, and secrets.
+* **.gitattributes** — normalizes line endings for cross-platform contribution.
+* **LICENSE** — MIT license (default for demos).
+* **.github/workflows/ci.yml** — basic CI to install Python and Node deps and run builds.
+
+---
+
+## Development tips & troubleshooting
+
+* **Mock Mode:** set `MOCK_MODE=true` to run fully offline.
+* **Ports:** frontend 5173, backend 8000. If Windows blocks, ensure proper permissions.
+* **Security & Privacy:** This demo stores all session data in memory and does not persist user CVs to disk by default.
+
+---
+
+## Minimal file layout
+
+```
+job-agent-nivo/
+├── backend/
+│   ├── app.py
+│   └── requirements.txt
+├── frontend/
+│   ├── src/main.jsx
+│   ├── index.css
+│   └── nivo.png
+└── README.md
+
+```
+
+---
+
+## Roadmap & ideas
+
+* Add robust PDF and `docx` extraction (`pdfminer.six`, `python-docx`) with retries and chunking.
+* Add tokenization and batching logic to avoid token-overflow with large CVs.
+* Extract a small, shared API client (`frontend/src/api.js`) to centralize fetch logic.
+* Componentize the frontend into `Uploader`, `DecisionCenter`, and `ResultsPanel`.
+* Add backend unit tests (`pytest`) and Playwright/Cypress E2E tests.
+
+---
+
+## Contributing & License
+
+* **Contributions:** Open an issue or PR; I can add CI tests and a contribution guide.
+* **License:** MIT (see `LICENSE`).
+
+---
+
+<p align="center">
+Developed with focus by the NIVO Strategy Team.
+</p>
