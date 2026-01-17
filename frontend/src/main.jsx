@@ -49,6 +49,7 @@ function App() {
           restart: 'נתחי קובץ נוסף',
           finishBtn: 'סיים',
           tryAgainBtn: 'נסה שוב',
+      orPasteText: 'או הדביקי טקסט:',
     },
     en: {
       agentName: 'Nivo',
@@ -69,6 +70,7 @@ function App() {
           restart: 'Analyze another file',
           finishBtn: 'Finish',
           tryAgainBtn: 'Try Again',
+      orPasteText: 'Or paste text:',
     }
   };
   const t = translations[language];
@@ -320,7 +322,7 @@ function App() {
                 {t.startBtn}
               </button>
               <div style={{ marginTop: 30, color: "var(--text-muted)" }}>
-                או הדביקי טקסט:
+                {t.orPasteText}
               </div>
               <textarea
                 rows={6}
