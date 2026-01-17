@@ -105,24 +105,48 @@ def build_match_job_prompt(cv_text: str, job_desc: str, lang: str = 'he') -> str
     if lang == 'en':
         return (
             "You are a career coach and recruiter. Analyze how well the CV matches the job description.\n"
-            "Respond in English ONLY with a JSON object containing:\n"
+            "Respond in English ONLY with a JSON object containing EXACTLY these fields:\n"
             "- 'match_score': Integer (0-100) how well the CV matches this job.\n"
-            "- 'common_terms': Array of keywords found in both CV and job description.\n"
-            "- 'missing_skills': Array of job requirements NOT found in the CV.\n"
-            "- 'recommended_changes': Array of specific changes to make the CV more relevant.\n"
-            "- 'cover_letter': A personalized, warm and professional cover letter (2-3 paragraphs) for this specific role.\n\n"
-            "Respond ONLY with valid JSON. No markdown, no extra text.\n\nCV:\n" + cv_text + "\n\nJOB DESCRIPTION:\n" + job_desc
+            "- 'score_after_improvement': Integer (0-100) estimated score if candidate uses tailored_cv.\n"
+            "- 'common_skills': Array of skills/keywords found in BOTH CV and job description (things the candidate HAS).\n"
+            "- 'required_skills': Array of all important skills/keywords from job description needed for this role.\n"
+            "- 'missing_skills': Array of job requirements NOT found in the CV (what candidate needs to learn).\n"
+            "- 'tailored_cv': String - FULL-LENGTH professional CV rewrite (minimum 1000 words) tailored to match this specific job. Maintain the same structure and length as the original CV with all sections intact (summary, achievements, technical skills, additional sections). Emphasize relevant skills while keeping ONLY what actually exists in the original CV. Use strong action verbs and quantified metrics. Reorganize and reframe existing experience to highlight job-relevant accomplishments. Do not invent skills or experience.\n"
+            "- 'cover_letter': String - personalized, warm and professional cover letter (2-3 substantial paragraphs) for this specific role. Should be 300-400 words.\n"
+            "- 'recommended_changes': Array of 3-4 specific, actionable changes to make the CV more relevant to this job.\n\n"
+            "CRITICAL RULES:\n"
+            "- tailored_cv must be FULL-LENGTH with complete sections from original CV, not abbreviated\n"
+            "- tailored_cv must ONLY use skills/experience that actually exist in the provided CV\n"
+            "- Do not invent or hallucinate qualifications\n"
+            "- Maintain original CV structure: Professional Summary, Key Achievements, Technical Skills, and any other sections\n"
+            "- Reorganize and reframe existing experience to match job requirements\n"
+            "- score_after_improvement should be 10-15 points higher than match_score\n"
+            "- Use job description keywords in cover_letter and tailored_cv\n"
+            "- Respond ONLY with valid JSON. No markdown, no extra text.\n\n"
+            "CV:\n" + cv_text + "\n\nJOB DESCRIPTION:\n" + job_desc
         )
     else:
         return (
-            "אתה יועץ קריירה וגיוס. נתח כיצד קורות החיים תואמים את תיאור המשרה.\n"
-            "הגב בעברית בלבד ב-JSON object המכיל:\n"
-            "- 'match_score': מספר שלם (0-100) כיצד קורות החיים תואמים משרה זו.\n"
-            "- 'common_terms': מערך של מילות-מפתח הנמצאות בקורות חיים וגם בתיאור המשרה.\n"
-            "- 'missing_skills': מערך של דרישות משרה שלא נמצאות בקורות החיים.\n"
-            "- 'recommended_changes': מערך של שינויים ספציפיים כדי להפוך את קורות החיים רלוונטיים יותר.\n"
-            "- 'cover_letter': מכתב מקדים מותאם, חם ומקצועי (2-3 פסקאות) למשרה ספציפית זו.\n\n"
-            "הגב רק ב-JSON תקני. ללא Markdown, ללא טקסט נוסף.\n\nקורות חיים:\n" + cv_text + "\n\nתיאור המשרה:\n" + job_desc
+            "אתה יועץ קריירה וגיוס מנוסה. נתח כיצד קורות החיים תואמים את תיאור המשרה.\n"
+            "הגב בעברית בלבד ב-JSON object המכיל בדיוק את השדות הבאים:\n"
+            "- 'match_score': מספר שלם (0-100) עד כמה קורות החיים תואמים משרה זו.\n"
+            "- 'score_after_improvement': מספר שלם (0-100) ניקוד משוער אם המועמד משתמש ב-tailored_cv.\n"
+            "- 'common_skills': מערך של כישורים/מילות-מפתח שנמצאות בקורות חיים וגם בתיאור משרה (דברים שיש למועמד).\n"
+            "- 'required_skills': מערך של כל הכישורים החשובים/מילות-מפתח מתיאור המשרה הנדרשים לתפקיד זה.\n"
+            "- 'missing_skills': מערך של דרישות משרה שלא נמצאות בקורות החיים (מה שמועמד צריך ללמוד).\n"
+            "- 'tailored_cv': מחרוזת - שכתוב קורות חיים בעברית באורך מלא (מינימום 1000 מילים) המותאמות למשרה ספציפית זו. שמור על אותו מבנה ואורך של קורות החיים המקוריים עם כל הסעיפים שלמים (סיכום מקצועי, הישגים, כישורים טכניים, סעיפים נוספים). הדגש כישורים רלוונטיים תוך שמירה רק על מה שבאמת קיים בקורות החיים המקוריים. השתמש בפעלים חזקים ובמדדים כמותיים. סדרו מחדש והגדר מחדש ניסיון קיים כדי להדגיש הישגים הרלוונטיים למשרה. אל תמציא כישורים או ניסיון.\n"
+            "- 'cover_letter': מחרוזת - מכתב מקדים מותאם, חם ומקצועי (2-3 פסקאות משמעותיות) למשרה ספציפית זו. צריך להיות 300-400 מילים.\n"
+            "- 'recommended_changes': מערך של 3-4 שינויים ספציפיים וישימים כדי להפוך את קורות החיים רלוונטיים יותר למשרה זו.\n\n"
+            "כללים קריטיים:\n"
+            "- tailored_cv חייב להיות בעל אורך מלא עם סעיפים שלמים מקורות החיים המקוריים, לא מקוצר\n"
+            "- tailored_cv חייב להשתמש רק בכישורים/ניסיון שבאמת קיימים בקורות החיים המסופקים\n"
+            "- אל תמציא או תהלוצינציה כישורים או ניסיון\n"
+            "- שמור על מבנה קורות החיים המקורי: סיכום מקצועי, הישגים מרכזיים, כישורים טכניים, וכל סעיף אחר\n"
+            "- סדרו מחדש והגדירו מחדש ניסיון קיים כדי להתאים לדרישות המשרה\n"
+            "- score_after_improvement צריך להיות 10-15 נקודות גבוה יותר מ-match_score\n"
+            "- השתמש במילות-מפתח מתיאור המשרה ב-cover_letter וב-tailored_cv\n"
+            "- הגב רק ב-JSON תקני. ללא Markdown, ללא טקסט נוסף.\n\n"
+            "קורות חיים:\n" + cv_text + "\n\nתיאור המשרה:\n" + job_desc
         )
 
 
@@ -152,7 +176,7 @@ def run_analyze_cv(text: str, job_desc: str = '', lang: str = 'he', max_tokens: 
     return call_openai_chat([{'role': 'user', 'content': prompt}], max_tokens=max_tokens)
 
 
-def run_match_job(cv_text: str, job_desc: str, lang: str = 'he', max_tokens: int = 600) -> Any:
+def run_match_job(cv_text: str, job_desc: str, lang: str = 'he', max_tokens: int = 3000) -> Any:
     prompt = build_match_job_prompt(cv_text, job_desc, lang)
     return call_openai_chat([{'role': 'user', 'content': prompt}], max_tokens=max_tokens)
 

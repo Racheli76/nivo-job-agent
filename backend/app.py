@@ -49,11 +49,13 @@ class CVText(BaseModel):
     text: Optional[str] = None
     session_id: Optional[str] = None
     job_desc: Optional[str] = None  # Optional job description for CV tailoring
+    language: Optional[str] = None  # Preferred language (he/en)
 
 class JobDesc(BaseModel):
     title: str = ""
     description: str
     session_id: Optional[str] = None
+    language: Optional[str] = None  # Preferred language (he/en)
 
 
 class TranslatePayload(BaseModel):
@@ -71,10 +73,17 @@ def _parse_json_from_text(text: str) -> Any:
     """Try to extract a JSON object from a model response text.
     Returns Python object or raises ValueError.
     """
+    if not text or not isinstance(text, str):
+        print(f"[DEBUG] _parse_json_from_text: text is empty or not string: {type(text)}")
+        raise ValueError('Text is empty or not a string')
+    
     # try direct load
     try:
-        return json.loads(text)
-    except Exception:
+        result = json.loads(text)
+        print(f"[DEBUG] Direct JSON parse succeeded, type={type(result)}")
+        return result
+    except Exception as e:
+        print(f"[DEBUG] Direct JSON parse failed: {e}")
         pass
 
     # find first { and last }
@@ -82,12 +91,17 @@ def _parse_json_from_text(text: str) -> Any:
     end = text.rfind('}')
     if start != -1 and end != -1 and end > start:
         snippet = text[start:end+1]
+        print(f"[DEBUG] Extracted JSON snippet ({len(snippet)} chars) from positions {start}-{end}")
         try:
-            return json.loads(snippet)
-        except Exception:
+            result = json.loads(snippet)
+            print(f"[DEBUG] Extracted JSON parse succeeded, type={type(result)}")
+            return result
+        except Exception as e:
+            print(f"[DEBUG] Extracted JSON parse failed: {e}")
             pass
 
     # no JSON found
+    print(f"[DEBUG] No valid JSON found in text")
     raise ValueError('No JSON object found')
 
 
@@ -139,21 +153,38 @@ async def analyze_cv(body: CVText):
             session_lang = s.get('lang')
     if not text:
         text = body.text or ''
-    lang = session_lang or _detect_language(text)
+    # Priority: explicitly provided language > session language > detected language
+    lang = body.language or session_lang or _detect_language(text)
     job_desc = body.job_desc or ''
+    print(f"[DEBUG] /analyze-cv: CV_len={len(text)}, lang={lang}, job_desc_len={len(job_desc)}, MOCK_MODE={MOCK_MODE}")
     if MOCK_MODE:
-        return {"result": mock_analyze_cv(text, lang, job_desc)}
+        try:
+            result = mock_analyze_cv(text, lang, job_desc)
+            print(f"[DEBUG] Mock returned: type={type(result)}, keys={list(result.keys()) if isinstance(result, dict) else 'not dict'}")
+            if isinstance(result, dict) and len(result) == 0:
+                print("[WARN] Mock returned empty dict!")
+            return {"result": result}
+        except Exception as e:
+            print(f"[DEBUG] Mock error: {e}")
+            return {"error": f"Mock error: {e}"}
     if not _openai_available():
         return {"error": "OpenAI API key not configured. Set OPENAI_API_KEY or enable MOCK_MODE."}
     try:
         from services.prompting import run_analyze_cv
         content = run_analyze_cv(text, job_desc, lang, max_tokens=2000)
+        print(f"[DEBUG] run_analyze_cv returned: len={len(content) if content else 0}, type={type(content)}")
+        if not content:
+            print("[WARN] run_analyze_cv returned empty!")
+            return {"error": "OpenAI returned empty response"}
         try:
             parsed = _parse_json_from_text(content)
+            print(f"[DEBUG] Successfully parsed JSON: {type(parsed)}, keys={list(parsed.keys()) if isinstance(parsed, dict) else 'not dict'}")
             return {"result": parsed}
-        except Exception:
-            return {"result": content}
+        except Exception as parse_err:
+            print(f"[DEBUG] JSON parse error: {parse_err}, returning raw content")
+            return {"result": {"error": f"Could not parse JSON: {parse_err}", "raw": content}}
     except Exception as e:
+        print(f"[DEBUG] Exception: {type(e).__name__}: {e}")
         return {"error": str(e)}
 
 @app.post('/match-job')
@@ -170,33 +201,38 @@ async def match_job(data: JobDesc):
         s = s or {}
         s.update({'job_desc': data.description, 'job_title': data.title})
         await session_store.set(data.session_id, s)
-    if not cv_text:
-        cv_text = ''
-    lang = session_lang or _detect_language(cv_text or data.description or '')
+    # Priority: explicitly provided language > session language > detected language
+    lang = data.language or session_lang or _detect_language(cv_text or data.description or '')
     if MOCK_MODE:
         return {"result": mock_match_job(cv_text, data.description, lang)}
     if not _openai_available():
         return {"error": "OpenAI API key not configured. Set OPENAI_API_KEY or enable MOCK_MODE."}
     try:
         from services.prompting import run_match_job
-        content = run_match_job(cv_text, data.description, lang, max_tokens=600)
+        content = run_match_job(cv_text, data.description, lang, max_tokens=3000)
         try:
             parsed = _parse_json_from_text(content)
             return {"result": parsed}
-        except Exception:
-            return {"result": content}
+        except Exception as e:
+            print(f"[ERROR] JSON parse failed in /match-job: {e}")
+            print(f"[DEBUG] Content length: {len(content) if content else 0}")
+            print(f"[DEBUG] Content preview: {content[:200] if content else 'None'}")
+            # Try to return parsed JSON anyway, or return error
+            return {"error": f"Failed to parse AI response: {str(e)}", "raw_content": content}
     except Exception as e:
         return {"error": str(e)}
 
 @app.post('/simulate-interview')
-async def simulate_interview(title: str = Form(...)):
+async def simulate_interview(title: str = Form(...), session_id: Optional[str] = Form(None), language: Optional[str] = Form(None)):
     # Accept a combined title possibly containing session id separated by '||' (frontend uses this)
     role = title
-    session_id = None
+    parsed_session_id = None
     if '||' in title:
         parts = title.split('||', 1)
         role = parts[0]
-        session_id = parts[1]
+        parsed_session_id = parts[1]
+    
+    session_id = session_id or parsed_session_id
 
     cv_text = ''
     session_lang = None
@@ -206,7 +242,8 @@ async def simulate_interview(title: str = Form(...)):
             cv_text = s.get('cv_text', '')
             session_lang = s.get('lang')
 
-    lang = session_lang or _detect_language(cv_text)
+    # Priority: explicitly provided language > session language > detected language
+    lang = language or session_lang or _detect_language(cv_text)
 
     if MOCK_MODE:
         return {"result": mock_simulate_interview(role, lang)}
@@ -214,7 +251,6 @@ async def simulate_interview(title: str = Form(...)):
         return {"error": "OpenAI API key not configured. Set OPENAI_API_KEY or enable MOCK_MODE."}
     try:
         from services.prompting import run_simulate_interview
-        content = run_simulate_interview(role, cv_text, lang, max_tokens=800)
         content = run_simulate_interview(role, cv_text, lang, max_tokens=800)
         try:
             parsed = _parse_json_from_text(content)

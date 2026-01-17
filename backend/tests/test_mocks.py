@@ -27,8 +27,12 @@ def test_mock_analyze_cv_en():
 
 def test_mock_match_job():
     out = mock_match_job('cv text', 'job desc', 'he')
-    assert out['match_score'] == 70
+    assert out['match_score'] == 75
     assert 'cover_letter' in out
+    assert 'tailored_cv' in out
+    assert 'common_skills' in out
+    assert 'required_skills' in out
+    assert 'missing_skills' in out
 
 
 def test_mock_analyze_cv_with_job_desc():

@@ -20,9 +20,19 @@ def call_openai_chat(messages: List[dict], max_tokens: int = 400) -> str:
         client = openai.OpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else openai.OpenAI()
         resp = client.chat.completions.create(model=settings.openai_model, messages=messages, max_tokens=max_tokens)
         # new API returns choices[0].message.content
-        return resp.choices[0].message.content
+        content = resp.choices[0].message.content
+        print(f"[DEBUG] OpenAI Response (new API): {len(content) if content else 0} chars")
+        if content:
+            print(f"[DEBUG] Content preview: {content[:200]}")
+        else:
+            print(f"[DEBUG] Content is EMPTY or None")
+        return content
 
     # older API
     openai.api_key = settings.openai_api_key
     resp = openai.ChatCompletion.create(model=settings.openai_model, messages=messages, max_tokens=max_tokens)
-    return resp.choices[0].message.content
+    content = resp.choices[0].message.content
+    print(f"[DEBUG] OpenAI Response (old API): {len(content) if content else 0} chars")
+    if content:
+        print(f"[DEBUG] Content preview: {content[:200]}")
+    return content
